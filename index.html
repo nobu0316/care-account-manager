@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f6f7f3">
+  <title>介護用口座</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">CARE ACCOUNT</p>
+        <h1>介護用口座</h1>
+      </div>
+      <span class="save-status" id="saveStatus">端末内に保存</span>
+    </header>
+
+    <main>
+      <section class="screen active" id="homeScreen" data-screen="home">
+        <div id="alertArea"></div>
+
+        <article class="balance-card primary-card">
+          <p class="card-label">確認済み残高</p>
+          <p class="balance-amount" id="confirmedBalance">0円</p>
+          <p class="card-note">最終確認日 <span id="confirmedDate">未確認</span></p>
+          <button class="button button-light full-width" id="openBalanceModal">残高を確認・更新する</button>
+        </article>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">FORECAST</p>
+              <h2>これからの残高</h2>
+            </div>
+            <button class="text-button" id="openThresholdModal">警告基準を変更</button>
+          </div>
+          <div class="forecast-grid">
+            <article class="forecast-card">
+              <p>今月末</p>
+              <strong id="forecastCurrent">0円</strong>
+              <span id="forecastCurrentStatus">確認中</span>
+            </article>
+            <article class="forecast-card">
+              <p>来月末</p>
+              <strong id="forecastNext">0円</strong>
+              <span id="forecastNextStatus">確認中</span>
+            </article>
+            <article class="forecast-card wide">
+              <p>3か月後</p>
+              <strong id="forecastThreeMonths">0円</strong>
+              <span id="forecastThreeStatus">確認中</span>
+            </article>
+          </div>
+        </section>
+
+        <article class="info-card" id="nextLargeExpense">
+          <div class="icon-box">出</div>
+          <div>
+            <p class="card-label">次回の大きな出金予定</p>
+            <strong id="nextExpenseTitle">予定はありません</strong>
+            <p id="nextExpenseDetail">固定入出金から予定を作成できます</p>
+          </div>
+        </article>
+
+        <section class="section-block compact">
+          <div class="section-heading">
+            <h2>今月の予定</h2>
+            <button class="text-button" data-nav-target="transactions">一覧を見る</button>
+          </div>
+          <div class="summary-row">
+            <div><span>入金</span><strong class="income-text" id="monthIncome">+0円</strong></div>
+            <div><span>出金</span><strong class="expense-text" id="monthExpense">-0円</strong></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="screen" id="transactionsScreen" data-screen="transactions">
+        <div class="screen-title-row">
+          <div><p class="eyebrow">TRANSACTIONS</p><h2>入出金一覧</h2></div>
+          <button class="button button-primary small" id="addTransactionButton">＋ 追加</button>
+        </div>
+        <div class="month-switcher">
+          <button class="icon-button" id="previousMonth" aria-label="前月">‹</button>
+          <div><strong id="selectedMonthLabel"></strong><button class="text-button block" id="goCurrentMonth">今月へ</button></div>
+          <button class="icon-button" id="nextMonth" aria-label="翌月">›</button>
+        </div>
+        <div class="month-total" id="monthTotal"></div>
+        <div class="transaction-list" id="transactionList"></div>
+      </section>
+
+      <section class="screen" id="recurringScreen" data-screen="recurring">
+        <div class="screen-title-row">
+          <div><p class="eyebrow">RECURRING</p><h2>固定入出金設定</h2></div>
+          <button class="button button-primary small" id="addRecurringButton">＋ 追加</button>
+        </div>
+        <article class="generator-card">
+          <h3>月次予定を作成</h3>
+          <p>有効な固定設定から、未作成分だけを追加します。</p>
+          <div class="generator-buttons">
+            <button class="button button-secondary" data-generate="current">今月分</button>
+            <button class="button button-secondary" data-generate="next">来月分</button>
+            <button class="button button-primary" data-generate="three">今後3か月分</button>
+          </div>
+        </article>
+        <div class="recurring-list" id="recurringList"></div>
+      </section>
+
+      <section class="screen" id="dataScreen" data-screen="data">
+        <div class="screen-title-row">
+          <div><p class="eyebrow">DATA</p><h2>データ管理</h2></div>
+        </div>
+        <article class="data-card">
+          <div class="data-icon">↓</div>
+          <div>
+            <h3>バックアップを保存</h3>
+            <p>すべてのデータをJSONファイルとして保存します。</p>
+          </div>
+          <button class="button button-secondary full-width" id="exportButton">JSONをエクスポート</button>
+        </article>
+        <article class="data-card">
+          <div class="data-icon">↑</div>
+          <div>
+            <h3>バックアップを復元</h3>
+            <p>現在のデータは、読み込んだ内容に置き換わります。</p>
+          </div>
+          <label class="button button-secondary full-width file-button">
+            JSONをインポート
+            <input type="file" id="importInput" accept=".json,application/json">
+          </label>
+        </article>
+        <article class="data-card danger-zone">
+          <div>
+            <h3>すべて初期化</h3>
+            <p>残高、入出金、固定設定を初期状態に戻します。</p>
+          </div>
+          <button class="button button-danger full-width" id="resetButton">データを初期化</button>
+        </article>
+        <p class="privacy-note">このアプリのデータは、この端末のブラウザ内だけに保存されます。銀行名や口座番号は入力しない設計です。</p>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="メインメニュー">
+      <button class="nav-item active" data-nav="home"><span>⌂</span>ホーム</button>
+      <button class="nav-item" data-nav="transactions"><span>↕</span>入出金</button>
+      <button class="nav-item" data-nav="recurring"><span>↻</span>固定設定</button>
+      <button class="nav-item" data-nav="data"><span>□</span>データ</button>
+    </nav>
+  </div>
+
+  <dialog id="balanceDialog">
+    <form method="dialog" id="balanceForm" class="modal-form">
+      <div class="modal-header"><div><p class="eyebrow">BALANCE</p><h2>残高を確認・更新</h2></div><button type="button" class="close-button" data-close-dialog aria-label="閉じる">×</button></div>
+      <label>確認日<input type="date" id="balanceDateInput" required></label>
+      <label>確認済み残高（円）<input type="number" id="balanceAmountInput" min="0" step="1" inputmode="numeric" required></label>
+      <p class="form-help">通帳で実際に確認した日と、その時点の残高を入力してください。</p>
+      <button class="button button-primary full-width" value="default">更新する</button>
+    </form>
+  </dialog>
+
+  <dialog id="thresholdDialog">
+    <form method="dialog" id="thresholdForm" class="modal-form">
+      <div class="modal-header"><div><p class="eyebrow">ALERT</p><h2>警告基準額</h2></div><button type="button" class="close-button" data-close-dialog aria-label="閉じる">×</button></div>
+      <label>基準額（円）<input type="number" id="thresholdInput" min="0" step="1000" inputmode="numeric" required></label>
+      <p class="form-help">予測残高がこの金額を下回ると注意を表示します。</p>
+      <button class="button button-primary full-width" value="default">保存する</button>
+    </form>
+  </dialog>
+
+  <dialog id="transactionDialog">
+    <form method="dialog" id="transactionForm" class="modal-form">
+      <div class="modal-header"><div><p class="eyebrow">TRANSACTION</p><h2 id="transactionDialogTitle">入出金を追加</h2></div><button type="button" class="close-button" data-close-dialog aria-label="閉じる">×</button></div>
+      <input type="hidden" id="transactionId">
+      <div class="form-grid">
+        <label>日付<input type="date" id="transactionDate" required></label>
+        <label>種別<select id="transactionType"><option value="expense">出金</option><option value="income">入金</option></select></label>
+      </div>
+      <label>内容<input type="text" id="transactionTitle" maxlength="30" placeholder="例：介護施設費" required></label>
+      <label>金額（円）<input type="number" id="transactionAmount" min="1" step="1" inputmode="numeric" required></label>
+      <label>状態<select id="transactionStatus"><option value="planned">予定</option><option value="actual">実績</option></select></label>
+      <label>メモ（任意）<textarea id="transactionMemo" maxlength="100" rows="2"></textarea></label>
+      <button class="button button-primary full-width" value="default">保存する</button>
+    </form>
+  </dialog>
+
+  <dialog id="recurringDialog">
+    <form method="dialog" id="recurringForm" class="modal-form">
+      <div class="modal-header"><div><p class="eyebrow">RECURRING</p><h2 id="recurringDialogTitle">固定入出金を追加</h2></div><button type="button" class="close-button" data-close-dialog aria-label="閉じる">×</button></div>
+      <input type="hidden" id="recurringId">
+      <label>内容<input type="text" id="recurringTitle" maxlength="30" required></label>
+      <div class="form-grid">
+        <label>種別<select id="recurringType"><option value="expense">出金</option><option value="income">入金</option></select></label>
+        <label>金額（円）<input type="number" id="recurringAmount" min="1" step="1" inputmode="numeric" required></label>
+      </div>
+      <div class="form-grid">
+        <label>発生日<select id="recurringDayType"><option value="day">毎月○日</option><option value="end">月末</option></select></label>
+        <label id="recurringDayLabel">日<input type="number" id="recurringDay" min="1" max="31" value="10"></label>
+      </div>
+      <label>繰り返し<select id="recurringRepeatType"><option value="monthly">毎月</option><option value="bimonthly">2か月ごと</option><option value="specified">指定月のみ</option></select></label>
+      <fieldset id="monthsField" class="months-field hidden"><legend>対象月</legend><div id="monthChecks"></div></fieldset>
+      <label class="toggle-row"><span>有効にする</span><input type="checkbox" id="recurringEnabled" checked></label>
+      <label>メモ（任意）<textarea id="recurringMemo" maxlength="100" rows="2"></textarea></label>
+      <button class="button button-primary full-width" value="default">保存する</button>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="script.js"></script>
+</body>
+</html>
