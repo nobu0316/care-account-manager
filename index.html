@@ -12,20 +12,33 @@
     <header class="app-header">
       <div>
         <p class="eyebrow">CARE ACCOUNT</p>
-        <h1>介護用口座</h1>
+        <h1 id="accountTitle">介護用口座</h1>
       </div>
-      <span class="save-status" id="saveStatus">端末内に保存</span>
+      <span class="save-status" id="saveStatus">未設定</span>
     </header>
 
     <main>
       <section class="screen active" id="homeScreen" data-screen="home">
-        <div id="alertArea"></div>
-
+        <article class="setup-card" id="setupCard">
+          <h2>口座情報が登録されていません</h2>
+          <p>通帳で確認した残高と確認日を登録するか、保管済みのJSONバックアップを復元してください。</p>
+          <button type="button" class="button button-primary full-width" id="startSetupButton">初期設定を開始する</button>
+          <button type="button" class="button button-secondary full-width" id="restoreSetupButton">JSONバックアップから復元する</button>
+        </article>
+        <article class="alert-card danger hidden" id="storageRecoveryCard" role="alert">
+          <h2>保存データを読み込めません</h2>
+          <p id="storageRecoveryMessage"></p>
+          <p>元の保存データを保護しているため、新しい設定の保存と初期化を停止しています。まずデータ管理から復旧用JSONを取得し、端末への保存を確認してください。その後、保管済みの正常なJSONから復元してください。</p>
+          <button type="button" class="button button-secondary full-width" id="openRecoveryDataButton">データ管理で復旧する</button>
+        </article>
         <article class="balance-card primary-card">
-          <p class="card-label">確認済み残高</p>
-          <p class="balance-amount" id="confirmedBalance">0円</p>
-          <p class="card-note">最終確認日 <span id="confirmedDate">未確認</span></p>
-          <button class="button button-light full-width" id="openBalanceModal">残高を確認・更新する</button>
+          <div class="balance-card-head">
+            <p class="card-label">通帳で確認した残高</p>
+            <span class="balance-age" id="confirmedAge">未確認</span>
+          </div>
+          <p class="balance-amount" id="confirmedBalance">未設定</p>
+          <p class="card-note">確認日 <span id="confirmedDate">未設定</span></p>
+          <button class="button button-light full-width balance-update-button" id="openBalanceModal">残高を更新する</button>
         </article>
 
         <section class="section-block">
@@ -37,32 +50,52 @@
             <button class="text-button" id="openThresholdModal">警告基準を変更</button>
           </div>
           <div class="forecast-grid">
-            <article class="forecast-card">
-              <p>今月末</p>
-              <strong id="forecastCurrent">0円</strong>
+            <button class="forecast-card" type="button" data-home-forecast-offset="0">
+              <p id="forecastCurrentLabel">今月末</p>
+              <strong id="forecastCurrent">未設定</strong>
               <span id="forecastCurrentStatus">確認中</span>
-            </article>
-            <article class="forecast-card">
-              <p>来月末</p>
-              <strong id="forecastNext">0円</strong>
+            </button>
+            <button class="forecast-card" type="button" data-home-forecast-offset="1">
+              <p id="forecastNextLabel">来月末</p>
+              <strong id="forecastNext">未設定</strong>
               <span id="forecastNextStatus">確認中</span>
-            </article>
-            <article class="forecast-card wide">
-              <p>3か月後</p>
-              <strong id="forecastThreeMonths">0円</strong>
+            </button>
+            <button class="forecast-card" type="button" data-home-forecast-offset="2">
+              <p id="forecastTwoMonthsLabel">2か月後</p>
+              <strong id="forecastTwoMonths">未設定</strong>
+              <span id="forecastTwoStatus">確認中</span>
+            </button>
+            <button class="forecast-card" type="button" data-home-forecast-offset="3">
+              <p id="forecastThreeMonthsLabel">3か月後</p>
+              <strong id="forecastThreeMonths">未設定</strong>
               <span id="forecastThreeStatus">確認中</span>
-            </article>
+            </button>
           </div>
+          <p class="forecast-disclaimer">予測には未確定の予定金額が含まれます。銀行の確定残高ではありません。</p>
         </section>
 
-        <article class="info-card" id="nextLargeExpense">
-          <div class="icon-box">出</div>
-          <div>
-            <p class="card-label">次回の大きな出金予定</p>
-            <strong id="nextExpenseTitle">予定はありません</strong>
-            <p id="nextExpenseDetail">固定入出金から予定を作成できます</p>
+        <section class="home-alerts" id="alertArea" aria-live="polite"></section>
+
+        <section class="section-block home-upcoming-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">UPCOMING</p>
+              <h2>次の入出金予定</h2>
+            </div>
+            <button class="text-button" data-nav-target="transactions">一覧を見る</button>
           </div>
-        </article>
+          <div class="home-upcoming-list" id="homeUpcomingList"></div>
+        </section>
+
+        <section class="section-block home-attention-section hidden" id="homeAttentionSection">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">CHECK</p>
+              <h2>確認が必要</h2>
+            </div>
+          </div>
+          <div class="home-attention-list" id="homeAttentionList"></div>
+        </section>
 
         <section class="section-block compact">
           <div class="section-heading">
@@ -95,15 +128,6 @@
           <div><p class="eyebrow">RECURRING</p><h2>固定入出金設定</h2></div>
           <button class="button button-primary small" id="addRecurringButton">＋ 追加</button>
         </div>
-        <article class="generator-card">
-          <h3>月次予定を作成</h3>
-          <p>有効な固定設定から、未作成分だけを追加します。</p>
-          <div class="generator-buttons">
-            <button class="button button-secondary" data-generate="current">今月分</button>
-            <button class="button button-secondary" data-generate="next">来月分</button>
-            <button class="button button-primary" data-generate="three">今後3か月分</button>
-          </div>
-        </article>
         <div class="recurring-list" id="recurringList"></div>
       </section>
 
@@ -115,7 +139,7 @@
           <div class="data-icon">↓</div>
           <div>
             <h3>バックアップを保存</h3>
-            <p>すべてのデータをJSONファイルとして保存します。</p>
+            <p>JSONのダウンロードを開始します。完了はアプリでは確認できません。Chromeのダウンロード一覧やファイルアプリで保存先とファイルを確認してください。</p>
           </div>
           <button class="button button-secondary full-width" id="exportButton">JSONをエクスポート</button>
         </article>
@@ -125,6 +149,11 @@
             <h3>バックアップを復元</h3>
             <p>現在のデータは、読み込んだ内容に置き換わります。</p>
           </div>
+          <div class="import-guidance">
+            <p>現在のデータがある場合は、先に上の「JSONをエクスポート」を実行し、ファイルが端末に保存されていることを確認・保管してください。自動バックアップは行いません。</p>
+            <label class="backup-confirm-row"><input type="checkbox" id="importBackupConfirmed"><span>現在のデータ（保護中は復旧用JSON）を取得し、ファイルの保存と保管を確認しました。</span></label>
+            <p>新規端末で保存データが一度もない場合、この確認は不要です。</p>
+          </div>
           <label class="button button-secondary full-width file-button">
             JSONをインポート
             <input type="file" id="importInput" accept=".json,application/json">
@@ -133,7 +162,7 @@
         <article class="data-card danger-zone">
           <div>
             <h3>すべて初期化</h3>
-            <p>残高、入出金、固定設定を初期状態に戻します。</p>
+            <p>残高、入出金、固定設定、変更履歴を消去し、未設定状態に戻します。必要なデータは先にJSONで保管してください。</p>
           </div>
           <button class="button button-danger full-width" id="resetButton">データを初期化</button>
         </article>
@@ -152,10 +181,11 @@
   <dialog id="balanceDialog">
     <form method="dialog" id="balanceForm" class="modal-form">
       <div class="modal-header"><div><p class="eyebrow">BALANCE</p><h2>残高を確認・更新</h2></div><button type="button" class="close-button" data-close-dialog aria-label="閉じる">×</button></div>
+      <label>口座名<input type="text" id="accountLabelInput" maxlength="40" required></label>
       <label>確認日<input type="date" id="balanceDateInput" required></label>
       <label>確認済み残高（円）<input type="number" id="balanceAmountInput" min="0" step="1" inputmode="numeric" required></label>
-      <p class="form-help">通帳で実際に確認した日と、その時点の残高を入力してください。</p>
-      <button class="button button-primary full-width" value="default">更新する</button>
+      <p class="form-help">通帳で実際に確認した日と、その時点の残高を確認して保存してください。確認日は自動で今日へ変更されません。</p>
+      <button class="button button-primary full-width" value="default">この内容で残高を更新</button>
     </form>
   </dialog>
 
@@ -184,6 +214,31 @@
     </form>
   </dialog>
 
+  <dialog id="occurrenceDialog">
+    <form method="dialog" id="occurrenceForm" class="modal-form">
+      <div class="modal-header"><div><p class="eyebrow">ONE-TIME</p><h2 id="occurrenceDialogTitle">今回の予定を変更</h2></div><button type="button" class="close-button" data-close-dialog aria-label="閉じる">×</button></div>
+      <input type="hidden" id="occurrenceRecurringId">
+      <input type="hidden" id="occurrenceMonth">
+      <article class="occurrence-summary">
+        <span id="occurrenceTypeLabel">出金</span>
+        <strong id="occurrenceTitle"></strong>
+        <small id="occurrenceSourceLabel">自動予定</small>
+      </article>
+      <div class="form-grid">
+        <label>今回の日付<input type="date" id="occurrenceDate" required></label>
+        <label>今回の金額（円）<input type="number" id="occurrenceAmount" min="1" step="1" inputmode="numeric" required></label>
+      </div>
+      <label>今回のメモ（任意）<textarea id="occurrenceMemo" maxlength="100" rows="2"></textarea></label>
+      <p class="form-help" id="occurrenceForecastNote">この変更は今回の発生分だけに適用されます。</p>
+      <div class="modal-actions">
+        <button type="submit" class="button button-primary full-width" id="occurrenceOverrideButton">今回だけ変更を保存</button>
+        <button type="button" class="button button-secondary full-width" id="occurrenceActualButton">実績として登録</button>
+        <button type="button" class="button button-secondary full-width hidden" id="occurrenceResetButton">今回だけ変更を取り消す</button>
+        <button type="button" class="button button-danger-outline full-width" id="occurrenceSkipButton">今回だけスキップ</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="recurringDialog">
     <form method="dialog" id="recurringForm" class="modal-form">
       <div class="modal-header"><div><p class="eyebrow">RECURRING</p><h2 id="recurringDialogTitle">固定入出金を追加</h2></div><button type="button" class="close-button" data-close-dialog aria-label="閉じる">×</button></div>
@@ -201,6 +256,7 @@
       <fieldset id="monthsField" class="months-field hidden"><legend>対象月</legend><div id="monthChecks"></div></fieldset>
       <label class="toggle-row"><span>有効にする</span><input type="checkbox" id="recurringEnabled" checked></label>
       <label>メモ（任意）<textarea id="recurringMemo" maxlength="100" rows="2"></textarea></label>
+      <p class="form-help" id="recurringEffectiveMonthHelp"></p>
       <button class="button button-primary full-width" value="default">保存する</button>
     </form>
   </dialog>
