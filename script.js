@@ -161,9 +161,9 @@ function normalizeData(raw) {
   if (!Array.isArray(raw.recurringItems)) validationError("recurringItems", "固定設定配列がありません");
 
   const confirmedDate = raw.settings.confirmedDate ?? "";
-  if (confirmedDate !== "" && !isValidDate(confirmedDate)) validationError("settings.confirmedDate", "確認日が不正です");
+  if (confirmedDate !== "" && !isValidDate(confirmedDate)) validationError("settings.confirmedDate", "記帳した日が不正です");
   const balanceIsUnset = sourceVersion === 2 && raw.settings.confirmedBalance === null;
-  if (balanceIsUnset && confirmedDate !== "") validationError("settings", "未設定残高に確認日は指定できません");
+  if (balanceIsUnset && confirmedDate !== "") validationError("settings", "未設定残高に記帳した日は指定できません");
   const settings = {
     accountLabel: requireText(raw.settings.accountLabel, "settings.accountLabel"),
     confirmedBalance: balanceIsUnset ? null : requireAmount(raw.settings.confirmedBalance, "settings.confirmedBalance", { allowZero: true }),
@@ -591,8 +591,8 @@ function buildForecastBreakdown(targetDate, data, built, includedTransactions, f
 
   built.transactions.forEach(item => {
     if (includedIds.has(item.id)) return;
-    if (item.date < confirmedDate) addExcluded(item, "before-confirmed", "通帳確認日以前");
-    else if (item.date === confirmedDate) addExcluded(item, "on-confirmed", "通帳確認日当日");
+    if (item.date < confirmedDate) addExcluded(item, "before-confirmed", "記帳した日以前");
+    else if (item.date === confirmedDate) addExcluded(item, "on-confirmed", "記帳した日当日");
     else if (parseDate(item.date) > targetDate) addExcluded(item, "after-target", "予測対象日より後");
   });
 
@@ -704,7 +704,7 @@ function getFourForecastPoints(referenceDate = new Date(), data = state) {
 }
 
 function forecastStatus(balance) {
-  if (balance === null) return { text: "残高と確認日を設定してください", className: "" };
+  if (balance === null) return { text: "残高と記帳した日を設定してください", className: "" };
   if (balance < 0) return { text: "残高不足の見込み", className: "danger" };
   if (balance < state.settings.alertThreshold) return { text: "警告基準額を下回ります", className: "warning" };
   return { text: "基準額以上", className: "" };
@@ -716,7 +716,7 @@ function getConfirmedAgeInfo(confirmedDate, referenceDate = new Date()) {
   const confirmedUtc = Date.UTC(confirmed.getFullYear(), confirmed.getMonth(), confirmed.getDate());
   const referenceUtc = Date.UTC(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
   const days = Math.floor((referenceUtc - confirmedUtc) / 86400000);
-  if (days < 0) return { days, label: "確認日を確認", stale: true };
+  if (days < 0) return { days, label: "記帳した日を確認", stale: true };
   if (days === 0) return { days, label: "本日確認", stale: false };
   return { days, label: `${days}日前`, stale: days >= BALANCE_REVIEW_DAYS };
 }
@@ -754,8 +754,8 @@ function getHomeViewModel(referenceDate = new Date(), data = state) {
   if (age.stale) {
     attention.push({
       kind: "balance",
-      title: age.days === null ? "通帳残高がまだ確認されていません" : age.days < 0 ? "残高の確認日が未来の日付です" : `残高確認から${age.days}日経過しています`,
-      detail: "通帳を確認した日と残高を更新してください。",
+      title: age.days === null ? "記帳した残高がまだ設定されていません" : age.days < 0 ? "記帳した日が未来の日付です" : `記帳した日から${age.days}日経過しています`,
+      detail: "記帳した日と、その日までの取引を反映した残高を更新してください。",
       action: "balance"
     });
   }
@@ -833,7 +833,7 @@ function renderForecastBreakdown(summary) {
   const targetDate = summary.targetDate || parseDate(breakdown.endDate);
   elements.forecastBreakdownTitle.textContent = `${targetDate.getFullYear()}年${targetDate.getMonth() + 1}月末の計算内訳`;
   if (!breakdown.configured) {
-    elements.forecastBreakdownContent.innerHTML = `<div class="breakdown-unavailable">通帳で確認した残高と確認日を設定すると、計算内訳を確認できます。</div>`;
+    elements.forecastBreakdownContent.innerHTML = `<div class="breakdown-unavailable">記帳した残高と記帳した日を設定すると、計算内訳を確認できます。</div>`;
     return;
   }
   const warnings = breakdown.duplicateSuspicions.length
@@ -848,7 +848,7 @@ function renderForecastBreakdown(summary) {
     ? breakdown.excludedTransactions.map(item => breakdownItemHtml(item, { excluded: true })).join("")
     : `<div class="breakdown-empty">確認できる対象外取引はありません。</div>`;
   elements.forecastBreakdownContent.innerHTML = `
-    <p class="breakdown-period">通帳確認日 ${formatDate(breakdown.confirmedDate)} ／ 計算期間 ${formatDate(breakdown.startDate)} ～ ${formatDate(breakdown.endDate)}</p>
+    <p class="breakdown-period">記帳した日 ${formatDate(breakdown.confirmedDate)} ／ 計算期間 ${formatDate(breakdown.startDate)} ～ ${formatDate(breakdown.endDate)}</p>
     <div class="breakdown-formula">
       <div><span>確認済み残高</span><strong>${formatYen(breakdown.confirmedBalance)}</strong></div>
       <div><span>採用入金</span><strong class="income-text">+${formatYen(breakdown.incomeTotal)}</strong></div>
@@ -960,9 +960,9 @@ function renderTransactions() {
     const forecastNet = items
       .filter(item => !item.isSkipped && item.date > state.settings.confirmedDate)
       .reduce((sum, item) => sum + signedAmount(item), 0);
-    elements.monthTotalScope.innerHTML = `通帳確認日より後：<strong class="${forecastNet >= 0 ? "income-text" : "expense-text"}">${forecastNet >= 0 ? "+" : ""}${formatYen(forecastNet)}</strong><br>月全体には確認日以前・当日の入出金も含み、予測残高とは集計期間が異なります。`;
+    elements.monthTotalScope.innerHTML = `記帳した日より後：<strong class="${forecastNet >= 0 ? "income-text" : "expense-text"}">${forecastNet >= 0 ? "+" : ""}${formatYen(forecastNet)}</strong><br>月全体には記帳した日以前・当日の入出金も含み、予測残高とは集計期間が異なります。`;
   } else {
-    elements.monthTotalScope.textContent = "月全体には通帳確認日以前・当日の入出金も含みます。残高と確認日を設定すると、予測期間分も表示します。";
+    elements.monthTotalScope.textContent = "月全体には記帳した日以前・当日の入出金も含みます。残高と記帳した日を設定すると、予測期間分も表示します。";
   }
 
   if (!items.length) {
@@ -1087,7 +1087,7 @@ function getEditableOccurrence(recurringId, occurrenceMonth) {
 function updateOccurrenceForecastNote() {
   const date = elements.occurrenceDate.value;
   elements.occurrenceForecastNote.textContent = date && state.settings.confirmedDate && date <= state.settings.confirmedDate
-    ? `確認済み残高の基準日（${formatDate(state.settings.confirmedDate)}）以前のため、実績登録しても残高予測には再計上されません。`
+    ? `記帳した日（${formatDate(state.settings.confirmedDate)}）以前のため、実績登録しても残高予測には再計上されません。`
     : "この変更は今回の発生分だけに適用されます。固定設定や他の月は変更しません。";
 }
 
@@ -1186,7 +1186,7 @@ function openBalanceSetup() {
 
 function setAccountBalance(accountLabel, amount, confirmedDate) {
   if (storageProtectionError) throw new Error("保存データを保護しています。正常なJSONから復元してください。");
-  if (!isValidDate(confirmedDate)) throw new Error("通帳で確認した日付を入力してください。");
+  if (!isValidDate(confirmedDate)) throw new Error("記帳した日を入力してください。");
   if (String(amount).trim() === "") throw new Error("確認した残高を入力してください。0円も登録できます。");
   const candidate = cloneData(state);
   candidate.settings.accountLabel = requireText(accountLabel.trim(), "口座名");

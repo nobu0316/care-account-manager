@@ -21,7 +21,7 @@
       <section class="screen active" id="homeScreen" data-screen="home">
         <article class="setup-card" id="setupCard">
           <h2>口座情報が登録されていません</h2>
-          <p>通帳で確認した残高と確認日を登録するか、保管済みのJSONバックアップを復元してください。</p>
+          <p>通帳に記帳された残高と、記帳した日を登録するか、保管済みのJSONバックアップを復元してください。</p>
           <button type="button" class="button button-primary full-width" id="startSetupButton">初期設定を開始する</button>
           <button type="button" class="button button-secondary full-width" id="restoreSetupButton">JSONバックアップから復元する</button>
         </article>
@@ -33,11 +33,11 @@
         </article>
         <article class="balance-card primary-card">
           <div class="balance-card-head">
-            <p class="card-label">通帳で確認した残高</p>
+            <p class="card-label">記帳した残高</p>
             <span class="balance-age" id="confirmedAge">未確認</span>
           </div>
           <p class="balance-amount" id="confirmedBalance">未設定</p>
-          <p class="card-note">確認日 <span id="confirmedDate">未設定</span></p>
+          <p class="card-note">記帳した日 <span id="confirmedDate">未設定</span></p>
           <button class="button button-light full-width balance-update-button" id="openBalanceModal">残高を更新する</button>
         </article>
 
@@ -114,12 +114,12 @@
             <h2>今月の予定</h2>
             <button class="text-button" data-nav-target="transactions">一覧を見る</button>
           </div>
-          <p class="summary-scope-note">月全体（通帳確認日以前・当日も含む）</p>
+          <p class="summary-scope-note">月全体（記帳した日以前・当日も含む）</p>
           <div class="summary-row">
             <div><span>入金</span><strong class="income-text" id="monthIncome">+0円</strong></div>
             <div><span>出金</span><strong class="expense-text" id="monthExpense">-0円</strong></div>
           </div>
-          <p class="summary-scope-note future">予測に加算する今月分（通帳確認日より後）</p>
+          <p class="summary-scope-note future">予測に加算する今月分（記帳した日より後）</p>
           <div class="summary-row compact-summary-row">
             <div><span>入金</span><strong class="income-text" id="monthFutureIncome">+0円</strong></div>
             <div><span>出金</span><strong class="expense-text" id="monthFutureExpense">-0円</strong></div>
@@ -202,9 +202,9 @@
     <form method="dialog" id="balanceForm" class="modal-form">
       <div class="modal-header"><div><p class="eyebrow">BALANCE</p><h2>残高を確認・更新</h2></div><button type="button" class="close-button" data-close-dialog aria-label="閉じる">×</button></div>
       <label>口座名<input type="text" id="accountLabelInput" maxlength="40" required></label>
-      <label>確認日<input type="date" id="balanceDateInput" required></label>
+      <label>記帳した日<input type="date" id="balanceDateInput" required></label>
       <label>確認済み残高（円）<input type="number" id="balanceAmountInput" min="0" step="1" inputmode="numeric" required></label>
-      <p class="form-help">通帳で実際に確認した日と、その時点の残高を確認して保存してください。確認日は自動で今日へ変更されません。</p>
+      <p class="form-help">通帳を見た日ではなく、登録する残高に反映されている最終日を入力してください。記帳した日は自動で今日へ変更されません。</p>
       <button class="button button-primary full-width" value="default">この内容で残高を更新</button>
     </form>
   </dialog>
