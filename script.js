@@ -474,17 +474,23 @@ function buildForecastTransactions(targetDate, data = state) {
   });
 
   const warnings = [];
+  const duplicateSuspicions = [];
   virtualTransactions.forEach(virtual => {
-    const suspected = data.transactions.find(item =>
+    const suspectedItems = data.transactions.filter(item =>
       !item.recurringId && item.date === virtual.date && item.type === virtual.type &&
       item.title === virtual.title && item.amount === virtual.amount
     );
-    if (suspected) warnings.push(`「${virtual.title}」(${virtual.date})は手入力取引との重複の可能性があります。自動では除外していません。`);
+    suspectedItems.forEach(manualTransaction => {
+      const message = `「${virtual.title}」(${virtual.date})は手入力取引との重複の可能性があります。自動では除外していません。`;
+      duplicateSuspicions.push({ manualTransaction, virtualTransaction: virtual, message });
+      warnings.push(message);
+    });
   });
   return {
     transactions: [...data.transactions.map(item => ({ ...item, isVirtual: false })), ...virtualTransactions],
     virtualTransactions,
-    warnings: [...new Set(warnings)]
+    warnings: [...new Set(warnings)],
+    duplicateSuspicions
   };
 }
 
@@ -519,15 +525,158 @@ function savedTransactionRuleDifference(data, transaction, referenceDate = new D
   return differences.length ? `現在の固定設定（${differences.join("、")}）と異なります。保存済み予定を優先しています。` : "";
 }
 
+function forecastTransactionSource(item) {
+  if (item.isVirtual && item.isAdjusted) return "個別変更";
+  if (item.isVirtual) return "自動予定";
+  return "保存済み取引";
+}
+
+function compareForecastTransactions(a, b) {
+  return a.date.localeCompare(b.date) || Number(a.isVirtual) - Number(b.isVirtual) || a.title.localeCompare(b.title, "ja");
+}
+
+function nextDateKey(value) {
+  const date = parseDate(value);
+  date.setDate(date.getDate() + 1);
+  return dateKey(date);
+}
+
+function buildForecastBreakdown(targetDate, data, built, includedTransactions, forecastBalance) {
+  const endDate = dateKey(targetDate);
+  if (!isBalanceConfigured(data)) {
+    return {
+      configured: false,
+      confirmedDate: data.settings.confirmedDate || null,
+      confirmedBalance: null,
+      startDate: null,
+      endDate,
+      incomeTotal: null,
+      expenseTotal: null,
+      forecastBalance: null,
+      transactions: [],
+      excludedTransactions: [],
+      duplicateSuspicions: []
+    };
+  }
+
+  const confirmedDate = data.settings.confirmedDate;
+  const ordered = [...includedTransactions].sort(compareForecastTransactions);
+  let runningBalance = data.settings.confirmedBalance;
+  const transactions = ordered.map(item => {
+    runningBalance += signedAmount(item);
+    return {
+      ...item,
+      source: forecastTransactionSource(item),
+      occurrenceMonth: item.generatedMonth || item.occurrenceMonth || null,
+      balanceAfter: runningBalance
+    };
+  });
+  const incomeTotal = ordered.filter(item => item.type === "income").reduce((sum, item) => sum + item.amount, 0);
+  const expenseTotal = ordered.filter(item => item.type === "expense").reduce((sum, item) => sum + item.amount, 0);
+  const includedIds = new Set(ordered.map(item => item.id));
+  const excludedTransactions = [];
+  const excludedKeys = new Set();
+  const addExcluded = (item, reasonCode, reason, source = forecastTransactionSource(item)) => {
+    const key = `${item.id}|${reasonCode}`;
+    if (includedIds.has(item.id) || excludedKeys.has(key)) return;
+    excludedKeys.add(key);
+    excludedTransactions.push({
+      ...item,
+      source,
+      occurrenceMonth: item.generatedMonth || item.occurrenceMonth || null,
+      reasonCode,
+      reason
+    });
+  };
+
+  built.transactions.forEach(item => {
+    if (includedIds.has(item.id)) return;
+    if (item.date < confirmedDate) addExcluded(item, "before-confirmed", "通帳確認日以前");
+    else if (item.date === confirmedDate) addExcluded(item, "on-confirmed", "通帳確認日当日");
+    else if (parseDate(item.date) > targetDate) addExcluded(item, "after-target", "予測対象日より後");
+  });
+
+  const startMonth = confirmedDate.slice(0, 7);
+  const targetMonth = monthKey(targetDate);
+  const occurrenceMonths = new Set(monthsBetween(startMonth, targetMonth));
+  data.recurringAdjustments.forEach(adjustment => {
+    if (adjustment.action === "override" && adjustment.date > confirmedDate && parseDate(adjustment.date) <= targetDate) {
+      occurrenceMonths.add(adjustment.occurrenceMonth);
+    }
+  });
+  const savedByOccurrence = new Map(
+    data.transactions
+      .filter(item => item.recurringId && item.generatedMonth)
+      .map(item => [occurrenceKey(item.recurringId, item.generatedMonth), item])
+  );
+  data.recurringItems.forEach(base => {
+    occurrenceMonths.forEach(occurrenceMonth => {
+      const rule = resolveRecurringRule(data, base.id, occurrenceMonth);
+      if (!rule) return;
+      const scheduled = {
+        id: `virtual_${base.id}_${occurrenceMonth}`,
+        date: scheduledDateForRule(rule, occurrenceMonth),
+        type: rule.type,
+        title: rule.title,
+        amount: rule.amount,
+        status: "planned",
+        memo: rule.memo,
+        recurringId: base.id,
+        generatedMonth: occurrenceMonth,
+        occurrenceMonth,
+        isVirtual: true,
+        isAdjusted: false
+      };
+      if (!rule.enabled) {
+        addExcluded(scheduled, "disabled-rule", "対象月の固定設定が無効");
+        return;
+      }
+      if (!shouldGenerate(rule, parseDate(`${occurrenceMonth}-01`))) {
+        addExcluded(scheduled, "repeat-not-matched", "繰り返し条件に該当しない");
+        return;
+      }
+      const key = occurrenceKey(base.id, occurrenceMonth);
+      if (savedByOccurrence.has(key)) {
+        addExcluded(scheduled, "saved-priority", "同じ発生分の保存済み取引が優先された");
+        return;
+      }
+      const adjustment = data.recurringAdjustments.find(item =>
+        item.recurringId === base.id && item.occurrenceMonth === occurrenceMonth
+      );
+      if (adjustment?.action === "skip") addExcluded(scheduled, "one-time-skip", "今回だけスキップ");
+    });
+  });
+
+  excludedTransactions.sort(compareForecastTransactions);
+  const duplicateSuspicions = built.duplicateSuspicions.filter(suspicion =>
+    includedIds.has(suspicion.manualTransaction.id) && includedIds.has(suspicion.virtualTransaction.id)
+  );
+  return {
+    configured: true,
+    confirmedDate,
+    confirmedBalance: data.settings.confirmedBalance,
+    startDate: nextDateKey(confirmedDate),
+    endDate,
+    incomeTotal,
+    expenseTotal,
+    forecastBalance,
+    transactions,
+    excludedTransactions,
+    duplicateSuspicions
+  };
+}
+
 function calculateForecastSummary(targetDate, data = state) {
   const built = buildForecastTransactions(targetDate, data);
   if (!isBalanceConfigured(data)) {
-    return { balance: null, minimumBalance: null, minimumDate: null, dailyAmounts: new Map(), ...built };
+    const breakdown = buildForecastBreakdown(targetDate, data, built, [], null);
+    return { balance: null, minimumBalance: null, minimumDate: null, dailyAmounts: new Map(), includedTransactions: [], breakdown, ...built };
   }
   const confirmedDate = data.settings.confirmedDate;
   const dailyAmounts = new Map();
-  built.transactions
-    .filter(item => item.date > confirmedDate && parseDate(item.date) <= targetDate)
+  const includedTransactions = built.transactions
+    .filter(item => item.date > confirmedDate && parseDate(item.date) <= targetDate);
+  includedTransactions
     .forEach(item => dailyAmounts.set(item.date, (dailyAmounts.get(item.date) || 0) + signedAmount(item)));
   let balance = data.settings.confirmedBalance;
   let minimumBalance = balance;
@@ -539,7 +688,8 @@ function calculateForecastSummary(targetDate, data = state) {
       minimumDate = date;
     }
   });
-  return { balance, minimumBalance, minimumDate, dailyAmounts, ...built };
+  const breakdown = buildForecastBreakdown(targetDate, data, built, includedTransactions, balance);
+  return { balance, minimumBalance, minimumDate, dailyAmounts, includedTransactions, breakdown, ...built };
 }
 
 function forecastAt(targetDate, data = state) {
@@ -663,6 +813,62 @@ function getHomeTransactionAction(item) {
   return { kind: "saved", id: item.id };
 }
 
+function breakdownItemHtml(item, { excluded = false } = {}) {
+  const status = item.status === "actual" ? "実績" : "予定";
+  const occurrence = item.occurrenceMonth ? `発生月 ${escapeHtml(item.occurrenceMonth)}` : "発生月なし";
+  const recurring = item.recurringId ? `recurringId ${escapeHtml(item.recurringId)}` : "手入力・単発";
+  return `<article class="breakdown-item">
+    <div class="breakdown-item-head">
+      <span class="breakdown-item-date">${escapeHtml(formatDate(item.date))}</span>
+      <span class="breakdown-item-title">${escapeHtml(item.title)}</span>
+      <span class="breakdown-item-amount ${item.type === "income" ? "income-text" : "expense-text"}">${item.type === "income" ? "+" : "-"}${formatYen(item.amount)}</span>
+    </div>
+    <div class="breakdown-item-meta"><span>${item.type === "income" ? "入金" : "出金"}</span><span>${status}</span><span>${escapeHtml(item.source)}</span><span>${recurring}</span><span>${occurrence}</span></div>
+    ${excluded ? `<div class="breakdown-reason">対象外：${escapeHtml(item.reason)}</div>` : `<div class="breakdown-item-balance">反映後 ${formatYen(item.balanceAfter)}</div>`}
+  </article>`;
+}
+
+function renderForecastBreakdown(summary) {
+  const breakdown = summary.breakdown;
+  const targetDate = summary.targetDate || parseDate(breakdown.endDate);
+  elements.forecastBreakdownTitle.textContent = `${targetDate.getFullYear()}年${targetDate.getMonth() + 1}月末の計算内訳`;
+  if (!breakdown.configured) {
+    elements.forecastBreakdownContent.innerHTML = `<div class="breakdown-unavailable">通帳で確認した残高と確認日を設定すると、計算内訳を確認できます。</div>`;
+    return;
+  }
+  const warnings = breakdown.duplicateSuspicions.length
+    ? `<div class="breakdown-warning"><strong>重複している可能性がある取引があります</strong>${breakdown.duplicateSuspicions.map(suspicion =>
+      `<span>${escapeHtml(formatDate(suspicion.manualTransaction.date))} ${escapeHtml(suspicion.manualTransaction.title)} ${formatYen(suspicion.manualTransaction.amount)}：手入力取引（ID ${escapeHtml(suspicion.manualTransaction.id)}）と自動予定（${escapeHtml(suspicion.virtualTransaction.recurringId)} / ${escapeHtml(suspicion.virtualTransaction.generatedMonth)}）を両方計上しています。自動では削除・統合していません。</span>`
+    ).join("")}</div>`
+    : "";
+  const transactionList = breakdown.transactions.length
+    ? breakdown.transactions.map(item => breakdownItemHtml(item)).join("")
+    : `<div class="breakdown-empty">この期間に採用した入出金はありません。</div>`;
+  const excludedList = breakdown.excludedTransactions.length
+    ? breakdown.excludedTransactions.map(item => breakdownItemHtml(item, { excluded: true })).join("")
+    : `<div class="breakdown-empty">確認できる対象外取引はありません。</div>`;
+  elements.forecastBreakdownContent.innerHTML = `
+    <p class="breakdown-period">通帳確認日 ${formatDate(breakdown.confirmedDate)} ／ 計算期間 ${formatDate(breakdown.startDate)} ～ ${formatDate(breakdown.endDate)}</p>
+    <div class="breakdown-formula">
+      <div><span>確認済み残高</span><strong>${formatYen(breakdown.confirmedBalance)}</strong></div>
+      <div><span>採用入金</span><strong class="income-text">+${formatYen(breakdown.incomeTotal)}</strong></div>
+      <div><span>採用出金</span><strong class="expense-text">-${formatYen(breakdown.expenseTotal)}</strong></div>
+      <div><span>予測残高</span><strong>${formatYen(breakdown.forecastBalance)}</strong></div>
+    </div>
+    <p class="breakdown-equation">予測残高 ＝ 確認済み残高 ＋ 採用入金 － 採用出金</p>
+    ${warnings}
+    <section class="breakdown-section"><h3>採用した入出金（${breakdown.transactions.length}件）</h3><div class="breakdown-list">${transactionList}</div></section>
+    <details class="breakdown-excluded"><summary>計算対象外の取引（${breakdown.excludedTransactions.length}件）</summary><div class="breakdown-list">${excludedList}</div></details>`;
+}
+
+function openForecastBreakdown(offset, referenceDate = new Date(), data = state) {
+  const targetDate = endOfMonth(addMonths(referenceDate, offset));
+  const summary = { targetDate, ...calculateForecastSummary(targetDate, data) };
+  renderForecastBreakdown(summary);
+  elements.forecastBreakdownDialog.showModal();
+  return summary;
+}
+
 function renderHome() {
   const now = new Date();
   const view = getHomeViewModel(now);
@@ -733,8 +939,15 @@ function renderHome() {
   const monthTransactions = points[0].transactions.filter(item => item.date.startsWith(currentKey));
   const income = monthTransactions.filter(item => item.type === "income").reduce((sum, item) => sum + item.amount, 0);
   const expense = monthTransactions.filter(item => item.type === "expense").reduce((sum, item) => sum + item.amount, 0);
+  const futureMonthTransactions = configured
+    ? monthTransactions.filter(item => item.date > state.settings.confirmedDate)
+    : [];
+  const futureIncome = futureMonthTransactions.filter(item => item.type === "income").reduce((sum, item) => sum + item.amount, 0);
+  const futureExpense = futureMonthTransactions.filter(item => item.type === "expense").reduce((sum, item) => sum + item.amount, 0);
   elements.monthIncome.textContent = `+${formatYen(income)}`;
   elements.monthExpense.textContent = `-${formatYen(expense)}`;
+  elements.monthFutureIncome.textContent = configured ? `+${formatYen(futureIncome)}` : "未設定";
+  elements.monthFutureExpense.textContent = configured ? `-${formatYen(futureExpense)}` : "未設定";
 }
 
 function renderTransactions() {
@@ -742,7 +955,15 @@ function renderTransactions() {
   const { items } = getTransactionItemsForMonth(selectedMonth);
   elements.selectedMonthLabel.textContent = `${selectedMonth.getFullYear()}年 ${selectedMonth.getMonth() + 1}月`;
   const net = items.filter(item => !item.isSkipped).reduce((sum, item) => sum + signedAmount(item), 0);
-  elements.monthTotal.innerHTML = `月間収支 <strong class="${net >= 0 ? "income-text" : "expense-text"}">${net >= 0 ? "+" : ""}${formatYen(net)}</strong>`;
+  elements.monthTotal.innerHTML = `月全体の収支 <strong class="${net >= 0 ? "income-text" : "expense-text"}">${net >= 0 ? "+" : ""}${formatYen(net)}</strong>`;
+  if (isBalanceConfigured()) {
+    const forecastNet = items
+      .filter(item => !item.isSkipped && item.date > state.settings.confirmedDate)
+      .reduce((sum, item) => sum + signedAmount(item), 0);
+    elements.monthTotalScope.innerHTML = `通帳確認日より後：<strong class="${forecastNet >= 0 ? "income-text" : "expense-text"}">${forecastNet >= 0 ? "+" : ""}${formatYen(forecastNet)}</strong><br>月全体には確認日以前・当日の入出金も含み、予測残高とは集計期間が異なります。`;
+  } else {
+    elements.monthTotalScope.textContent = "月全体には通帳確認日以前・当日の入出金も含みます。残高と確認日を設定すると、予測期間分も表示します。";
+  }
 
   if (!items.length) {
     elements.transactionList.innerHTML = `<div class="empty-state">この月の入出金予定はありません。<br>固定設定を追加すると自動で表示されます。</div>`;
@@ -929,6 +1150,9 @@ document.querySelectorAll("[data-nav-target]").forEach(button => button.addEvent
 document.querySelectorAll("[data-home-forecast-offset]").forEach(button => button.addEventListener("click", () => {
   selectedMonth = addMonths(new Date(), Number(button.dataset.homeForecastOffset));
   navigate("transactions");
+}));
+document.querySelectorAll("[data-forecast-breakdown-offset]").forEach(button => button.addEventListener("click", () => {
+  openForecastBreakdown(Number(button.dataset.forecastBreakdownOffset));
 }));
 elements.homeUpcomingList.addEventListener("click", event => {
   const target = event.target.closest("[data-home-action]");

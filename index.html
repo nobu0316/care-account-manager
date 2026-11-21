@@ -49,27 +49,39 @@
             </div>
             <button class="text-button" id="openThresholdModal">警告基準を変更</button>
           </div>
-          <div class="forecast-grid">
-            <button class="forecast-card" type="button" data-home-forecast-offset="0">
-              <p id="forecastCurrentLabel">今月末</p>
-              <strong id="forecastCurrent">未設定</strong>
-              <span id="forecastCurrentStatus">確認中</span>
-            </button>
-            <button class="forecast-card" type="button" data-home-forecast-offset="1">
-              <p id="forecastNextLabel">来月末</p>
-              <strong id="forecastNext">未設定</strong>
-              <span id="forecastNextStatus">確認中</span>
-            </button>
-            <button class="forecast-card" type="button" data-home-forecast-offset="2">
-              <p id="forecastTwoMonthsLabel">2か月後</p>
-              <strong id="forecastTwoMonths">未設定</strong>
-              <span id="forecastTwoStatus">確認中</span>
-            </button>
-            <button class="forecast-card" type="button" data-home-forecast-offset="3">
-              <p id="forecastThreeMonthsLabel">3か月後</p>
-              <strong id="forecastThreeMonths">未設定</strong>
-              <span id="forecastThreeStatus">確認中</span>
-            </button>
+          <div class="forecast-grid" id="forecastGrid">
+            <div class="forecast-card-group">
+              <button class="forecast-card" type="button" data-home-forecast-offset="0">
+                <p id="forecastCurrentLabel">今月末</p>
+                <strong id="forecastCurrent">未設定</strong>
+                <span id="forecastCurrentStatus">確認中</span>
+              </button>
+              <button class="forecast-breakdown-button" type="button" data-forecast-breakdown-offset="0">内訳を見る</button>
+            </div>
+            <div class="forecast-card-group">
+              <button class="forecast-card" type="button" data-home-forecast-offset="1">
+                <p id="forecastNextLabel">来月末</p>
+                <strong id="forecastNext">未設定</strong>
+                <span id="forecastNextStatus">確認中</span>
+              </button>
+              <button class="forecast-breakdown-button" type="button" data-forecast-breakdown-offset="1">内訳を見る</button>
+            </div>
+            <div class="forecast-card-group">
+              <button class="forecast-card" type="button" data-home-forecast-offset="2">
+                <p id="forecastTwoMonthsLabel">2か月後</p>
+                <strong id="forecastTwoMonths">未設定</strong>
+                <span id="forecastTwoStatus">確認中</span>
+              </button>
+              <button class="forecast-breakdown-button" type="button" data-forecast-breakdown-offset="2">内訳を見る</button>
+            </div>
+            <div class="forecast-card-group">
+              <button class="forecast-card" type="button" data-home-forecast-offset="3">
+                <p id="forecastThreeMonthsLabel">3か月後</p>
+                <strong id="forecastThreeMonths">未設定</strong>
+                <span id="forecastThreeStatus">確認中</span>
+              </button>
+              <button class="forecast-breakdown-button" type="button" data-forecast-breakdown-offset="3">内訳を見る</button>
+            </div>
           </div>
           <p class="forecast-disclaimer">予測には未確定の予定金額が含まれます。銀行の確定残高ではありません。</p>
         </section>
@@ -102,10 +114,17 @@
             <h2>今月の予定</h2>
             <button class="text-button" data-nav-target="transactions">一覧を見る</button>
           </div>
+          <p class="summary-scope-note">月全体（通帳確認日以前・当日も含む）</p>
           <div class="summary-row">
             <div><span>入金</span><strong class="income-text" id="monthIncome">+0円</strong></div>
             <div><span>出金</span><strong class="expense-text" id="monthExpense">-0円</strong></div>
           </div>
+          <p class="summary-scope-note future">予測に加算する今月分（通帳確認日より後）</p>
+          <div class="summary-row compact-summary-row">
+            <div><span>入金</span><strong class="income-text" id="monthFutureIncome">+0円</strong></div>
+            <div><span>出金</span><strong class="expense-text" id="monthFutureExpense">-0円</strong></div>
+          </div>
+          <p class="forecast-disclaimer">予測残高は確認済み残高を基準にするため、月全体の収支とは集計期間が異なります。</p>
         </section>
       </section>
 
@@ -120,6 +139,7 @@
           <button class="icon-button" id="nextMonth" aria-label="翌月">›</button>
         </div>
         <div class="month-total" id="monthTotal"></div>
+        <p class="month-total-scope" id="monthTotalScope"></p>
         <div class="transaction-list" id="transactionList"></div>
       </section>
 
@@ -259,6 +279,13 @@
       <p class="form-help" id="recurringEffectiveMonthHelp"></p>
       <button class="button button-primary full-width" value="default">保存する</button>
     </form>
+  </dialog>
+
+  <dialog id="forecastBreakdownDialog" class="forecast-breakdown-dialog">
+    <div class="modal-form forecast-breakdown-modal">
+      <div class="modal-header"><div><p class="eyebrow">FORECAST DETAILS</p><h2 id="forecastBreakdownTitle">予測残高の計算内訳</h2></div><button type="button" class="close-button" data-close-dialog aria-label="閉じる">×</button></div>
+      <div id="forecastBreakdownContent"></div>
+    </div>
   </dialog>
 
   <div class="toast" id="toast" role="status"></div>
